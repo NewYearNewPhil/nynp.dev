@@ -1,0 +1,106 @@
+---
+layout: ../../layouts/Layout.astro
+title: Experiments on Excalidraw, VS Code & the flexibility of SVG
+date: 2023-11-30
+metaDescription: Demonstration of a web development workflow using Excalidraw, its companion VS Code extension and how to effectively make use of it.
+---
+import ResponsiveImage from '../../components/ReponsiveImage.astro';
+import demo from './assets/excalidraw-vscode-dx-demo.webp';
+import ExcalidrawViewer from '../../components/ExcalidrawViewer.tsx'
+import test from './assets/excalidraw-test.excalidraw.svg';
+
+# Experiments on Excalidraw, VS Code & the flexibility of SVG
+[Excalidraw](https://excalidraw.com/) is a browser based diagramming tool with a focus on simplicity and has a charming look to it in my personal opinion.
+I prefer it to something like [draw.io](https://app.diagrams.net/) because it's not designed to create professional, scientific diagrams, but instead serves as a whiteboard replacement.
+It just feels really nice to use.
+
+Excalidraw has one feature that makes it stand out from the competition: When exporting images from it (`.png` or `.svg`), it can embed its "scene" into the image. That way, if images
+exported from Excalidraw are distributed somewhere, it's possible to just take this exported imaged, load it into Excalidraw and edit the diagram.
+For developers like myself, the [Excalidraw extension for VS Code](https://marketplace.visualstudio.com/items?itemName=pomdtr.excalidraw-editor) further improves on that feature by abstracting away the manual export.
+Files named `<name>.excalidraw.svg` or `<name>.excalidraw.png` can be opened and edited with the Excalidraw extension. When saving the diagram, the file is replaced by a newly exported version, including the scene information.
+
+For my made up use case (integrating diagrams into a website), this is a perfect fit: My diagrams live in the websites source code as `.svg` files. When I make changes to the diagram using the Excalidraw extension,
+the file system watcher of my build tool recognizes the change and *hot-reloads* the page. That way, I can work on a blog post in its entirety (text & diagrams), having an always up to date live preview.
+
+However, there are some limitations with this workflow:
+- No fonts (the exported svg refers to local `.woff2` files which the browser doesn't have)
+- No support for Dark Mode
+- No inline editing in the web
+
+With that said, let's get to working around these limitations. I'll be experimenting directly in this website, which is built using Astro and React (see [Hello World](/logs/hello-world/)), but the approach is universal.
+
+## Fonts
+SVGs contain references to the fonts used in `<text>` elements. There seem to be two default fonts: `Virgil` and `Cascadia`.
+In the exported SVG, those fonts are referenced using file urls like this (URL shortened):
+```css
+@font-face {
+    font-family: "Virgil";
+    src: url("https://file%2B.vscode-resource");
+}
+```
+
+I *could* have a look at the VS Code extension and improve it by adding a CDN fallback for the fonts, but since I want to avoid
+users having to load files from some random CDN, I opted to include the font files in my website and reference them by
+replacing the respective url strings in the SVG. Basically like this:
+```js
+styleElement.textContent = styleElement.textContent.replace(
+    /font-family: "Virgil";\s*src: url\("https:\/\/file%2B\.vscode-resource\.vscode-cdn\.net\/[^\)]+"\)/,
+    'font-family: "Virgil"; src: url("/fonts/Virgil.woff2")'
+);
+```
+
+In theory, that's all that's required to correctly load the required fonts. However, because I haven't changed the extension
+itself and definitively want to avoid pre-processing my SVGs, I opted to do this on the fly. First, I load the SVG file as text.
+Then, I do the font replacement (and while we're at it, I change its width to 100% so it looks nicer). Finally, I render
+the SVG on the page using React's `dangerouslySetInnerHTML`. This forces me to trust myself to not inject anything malicious,
+but I think I can handle that risk.
+
+## Dark Mode
+SVGs are just weird HTML, so this actually turned out to be fairly simple as the main requirement is already fulfilled:
+The SVG is already present directly in the rendered HTML (as opposed to within an `<img>` tag), so this small CSS snippet does the trick:
+```css
+# needed !important for specificity reasons (the style in the SVG is inline)
+.svg rect {
+    fill: #13151a !important;
+}
+
+.svg text, .svg g {
+    fill: #ffffff !important;
+}
+
+.svg g path {
+    stroke: #ffffff !important;
+}
+
+@media (prefers-color-scheme: light) {
+    .svg rect {
+        fill: #ffffff !important;
+    }
+    
+    .svg text, .svg g {
+        fill: #000000 !important;
+    }
+
+    .svg g path {
+        stroke: #000000 !important;
+    }
+}
+```
+This works well for all simple diagrams that rely on the default text / line color. Custom styled texts and things like that are not
+included yet, their color will just be overriden. This is a little different to how Excalidraw itself handles dark mode, but it'll do for now.
+
+Here's a screen recording of what the development workflow now looks like:
+<ResponsiveImage src={demo} alt="Excalidraw VS Code DX Demo" />
+
+
+## Inline Editing
+To put the cherry on top, I felt it was a nice feature to allow visitors to directly play around with the diagrams,
+without leaving the page. I've integrated the Excalidraw editor ([npm](https://www.npmjs.com/package/@excalidraw/excalidraw)) directly onto the web page, where it's activated by clicking
+on a diagram. Try it yourself by clicking on this diagram:
+<ExcalidrawViewer src={test.src} client:visible />
+I'd like to point out that the JS required to display the Excalidraw editor is only loaded once, no matter
+how many editors are opened on a page. Also, this JS is only loaded when it is actually required - if you don't click on
+the diagram, only the SVG is loaded to save your precious bandwidth. Changes made in this mode aren't persisted,
+but you can export the image from the editor.
+
+Pretty cool, no?

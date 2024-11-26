@@ -1,0 +1,48 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+import { getCollection } from "astro:content";
+const blogEntries = await getCollection("blog");
+---
+
+<Layout title="Blog">
+  <h1>logs</h1>
+  <ul>
+    {
+      blogEntries.sort((a,b) => b.data.date.getTime() - a.data.date.getTime())
+        .map((blogPostEntry, index) => (
+        <li>
+          {index === 0 ? (
+            <a href={`/logs/${blogPostEntry.slug}/`}>
+              latest.log
+              <span>{blogPostEntry.data.title}</span>
+            </a>
+          ) : (
+            <a href={`/logs/${blogPostEntry.slug}/`}>
+              {blogPostEntry.data.date.toISOString().split("T")[0]}.log
+              <span>{blogPostEntry.data.title}</span>
+            </a>
+          )}
+        </li>
+      ))
+    }
+  </ul>
+  <p>
+    I don't do newsletters, if you would like to be updated on new blog posts
+    you can subscribe to the
+    <a href="/logs/rss.xml" class="no-underline italic">RSS Feed</a>
+    or follow me on <a href="https://floss.social/@nynp">Mastodon</a>.
+  </p>
+</Layout>
+
+<style>
+  span {
+    font-style: italic;
+  }
+  a {
+    text-decoration: none;
+  }
+  a span {
+    text-decoration: underline;
+  }
+</style>

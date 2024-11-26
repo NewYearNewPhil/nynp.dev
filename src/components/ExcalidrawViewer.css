@@ -1,0 +1,25 @@
+.svg rect {
+    fill: #13151a !important;
+}
+
+.svg text, .svg g {
+    fill: #ffffff !important;
+}
+
+.svg g path {
+    stroke: #ffffff !important;
+}
+
+@media (prefers-color-scheme: light) {
+    .svg rect {
+        fill: #ffffff !important;
+    }
+    
+    .svg text, .svg g {
+        fill: #000000 !important;
+    }
+
+    .svg g path {
+        stroke: #000000 !important;
+    }
+}
