@@ -1,0 +1,49 @@
+---
+layout: ../../layouts/Layout.astro
+title: Hello World!
+date: 2023-11-30
+metaDescription: Hi there! This post starts off my personal blog. Check it out!
+---
+# Hello World!
+Hi there! This post starts off my personal blog. You can expect to find interesting entries
+about software development and related fields. However, please do not expect any sort of consistency -
+this is a hobby project and I will likely only work on it during random bursts of energy.
+
+## About Me
+My name is Philipp Allweyer, going as *NewYearNewPhil*. At the time of writing this, I am 25 years old
+and currently working on my Masters degree in applied computer science at [HTW Saar](https://www.htwsaar.de/).
+
+I have a lot of experience troughout the entire web development stack as well as some basic
+applied knowledge of machine learning. I was one of the co-founders of [alocalo](https://www.saarbruecker-zeitung.de/saarland/saar-wirtschaft/saarlaendisches-start-up-alocalo-will-amazon-die-stirn-bieten_aid-72313171),
+a startup focusing on providing local alternatives to users while they are shopping online. Sadly, even though in 2022
+we were able to secure funding via the [EIC Accelerator](https://www.dorucon.de/dorucon-sichert-saarlaendischem-start-up-alocalo-millionenhohe-foerderung-aus-bruessel/),
+alocalo ultimately didn't work out and we were forced to [file for insolvency](https://www.sr.de/sr/home/nachrichten/politik_wirtschaft/insolvenz_startup_alocalo_saarland_100.html).
+
+Nowadays I'm focusing on my studies and working on various side projects (like this one!) in my spare time.
+
+## nynp.dev Stack
+Given that this blog is aimed at fellow software engineers, I'll share some details on the setup of this page. Even though
+the page is explicitly simple, some of the details might be interesting for readers.
+
+nynp.dev is built with the framework [Astro](https://astro.build/) and [React](https://react.dev/). Astro is essentially
+a static site generator that is able to integrate components written in other web frameworks, or components following the
+WebComponent standard. While Astro also supports Server Side Rendering (dubbed "on demand"), this page currently doesn't require it.
+Astro is packed full of amazing features, definitively check it out. For example, I'm defining the content of all pages
+in Markdown - big fan of that.
+
+I used React for the dynamic parts - React components are rendered during site generation, only its resulting output is
+shipped to the browser (without any javascript). Those components are then hydrated in the browser as needed - critically, after
+the First Content Paint.
+
+For styling, I rely on the amazing [Tailwind](https://tailwindcss.com/) CSS framework with its many utility functions.
+Design inspiration stems from Casey Neistat's [website](https://www.caseyneistat.com/) - not because I'm particularly fond
+of him, but I'm a fan of the extremely minimalistic approach to conveying information.
+
+The website is eventually compiled into plain HTML, CSS & JS, which is uploaded to and hosted by [Cloudflare Pages](https://pages.cloudflare.com/).
+That way, I don't ever need to worry about where & how to host it, at the cost of relying on a US entity.
+
+## What's Next?
+At the same time as this introductory post, my first "real" blog post is going live, where I demonstrate a cool way
+to handle diagrams. It's very cool, I promise! Check it out [here](/logs/excalidraw-vscode-dx/).
+
+Apart from that, no promises - we'll see.

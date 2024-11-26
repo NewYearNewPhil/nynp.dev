@@ -1,0 +1,136 @@
+---
+layout: ../../layouts/Layout.astro
+title: "Project Showcase: Astro Photo Site (+ Cloudflare CD)"
+date: 2024-06-01
+metaDescription: "Walktrough of a recent project: Astro site that shows photos, deployed with Cloudflare Pages"
+---
+import ResponsiveImage from '../../components/ReponsiveImage.astro'
+import githubStoragelimit from './assets/github-storage-limit.png';
+import cfPagesGithub from './assets/cf-pages-github.png';
+
+# Astro Photo Site (+ Cloudflare CD)
+
+A friend of mine wanted to have a small website where he could showcase pictures he's taking because he doesn't like Instagram. We looked into getting something up and running quickly, but things like Squarespace cost money and Wordpress is kind of a pain to set up and manage. So I decided to build something. I learned some new things along the way and I think it's an interesting setup, so I'm writing it down here in case anyone is interested.
+
+## TLDR
+Created an Astro site (Tailwind, DaisyUI) with image optimization & variants, `.md` file based "CMS", asset storage with Git LFS and Cloudflare R2, automated deployment with cloudflare pages, development / management in github codespace, at a total price of $0 (unless you want your own domain). All code available in the [Github Repo](https://github.com/NewYearNewPhil/astro-photo-site), demo [here](https://astro-photo-site.nynp.dev).
+
+## Astro Site
+If you haven't heard of [Astro](https://astro.build/), it's a a "web framework for content-driven websites" that I like a lot. Its [Content Collections](https://docs.astro.build/en/guides/content-collections/) make it possible to easily generate pages based on markdown files. To make UI things easier, I added [Tailwind](https://tailwindcss.com/) and [DaisyUI](https://daisyui.com/) to the project - if I have a choice between writing CSS and not writing CSS, I prefer not to.
+
+The site should be able to display photos of varying aspect ratios in a two-column setup. You might know this from Pinterest, the pattern is often referred to as "Masonry". I went trough some trouble trying to do this neatly in CSS (css-tricks gives a great overview on the topic [here](https://css-tricks.com/piecing-together-approaches-for-a-css-masonry-layout/)), but eventually decided that until native CSS support is [available](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout/Masonry_layout#browser_compatibility), I would roll out a crude solution myself: I organized the page layout to contain 2 columns, then go over the list of all images and sort them into the correct column. Once an image is added, its height is added to the total column height. The next image will then be sorted into the column that has the lower total height. This solution is not ideal and hardcodes some assumptions (e.g. there are only ever two columns), but I think it's good enough for now.
+
+Astro supports two modes: Generating all required `html` files etc. in a build step, or "On Demand". Other frameworks would call this Server Side Rendering (SSR). For this project, SSR would work great, especially if some online CMS would be used. This would have been an option, but I decided to simply work with local files, pushed to git using Git LFS (more on that later on).
+
+The last aspect I want to touch on are [View Transitions](https://docs.astro.build/en/guides/view-transitions/), which are built right into Astro. These provide a very smooth transition when navigating trough pages, making them feel more like a SPA rather than individual webpages, while keeping all the advantages. It's hard to describe how this feels - playing around with the [demo website](https://astro-photo-site.nynp.dev/) should give a good impression of what I mean by this.
+
+## "CMS"
+The site needs a way for non developers to add photos and configure tags. I think most people are able to work with files, so I went for this approach. The plan: For each photo, there has to be a file like this:
+```yml
+---
+title: "Tokio At Night"
+src: "../../assets/images/photo-1549693578-a094e577de3f.jpeg"
+date: 2022-01-01
+tags: ["Tokio"]
+---
+```
+To make things easier, I created a [script](https://github.com/NewYearNewPhil/astro-photo-site/blob/main/generate_image_markdown.js) that generates the `*.md` files based on the images in the `assets` folder. The generated files already contain the correct `src` entry, the other values can be edited in a text editor.
+
+The schema is defined and enforced by [`src/content/config.ts`](https://github.com/NewYearNewPhil/astro-photo-site/blob/main/src/content/config.ts):
+```ts
+const imagesCollection = defineCollection({
+    type: 'content',
+	schema: ({ image }) => z.object({
+		title: z.string(),
+		date: z.date(),
+		src: image(),
+		tags: z.optional(z.array(z.string())),
+	})
+});
+```
+The `tags` array defines groups of photos that can be reached via the Dropdown in the navbar of the page.
+To generate the required pages in Astro, I needed to implement a `getStaticPaths` method that also handles pagination. Astro has built-ins for this ([docs](https://docs.astro.build/en/guides/routing/#static-ssg-mode)):
+```ts
+export async function getStaticPaths({ paginate }: { paginate: any }) {
+	onst images = await getCollection("images");
+	return paginate(
+		images.sort((i1, i2) => i2.data.date.getTime() - i1.data.date.getTime()),
+		{pageSize: 20}
+	);
+}
+```
+Generating the pages for all tags looks a bit more tricky, but the the logic is similar:
+```ts
+export async function getStaticPaths({ paginate }: { paginate: any }) {
+	const images = await getCollection("images");
+	const tags = images.reduce((acc: any, image) => {
+		image.data.tags?.forEach((tag) => {
+		if (!acc.includes(tag)) acc.push(tag)
+	});
+	return acc;
+}, []);
+	return tags.flatMap((tag: string) => {
+		const filteredImages = images.filter((image) =>
+			image.data.tags?.includes(tag),
+		);
+
+		return paginate(
+			filteredImages.sort((i1, i2) => i2.data.date.getTime() - i1.data.date.getTime()),
+			{
+				params: { tag },
+				pageSize: 20,
+			},
+		);
+	});
+}
+```
+This results in the following `html` output, if there are photos tagged `paris` and `tokio`:
+- `1/index.html`
+- `2/index.html`
+- `paris/1/index.html`
+- `paris/2/index.html`
+- `tokio/1/index.html`
+- `...`
+## Image Optimization
+Full size images can be quite large. If I want to display 20 of them at once on a page, I need to scale them down. At the same time, I want to render a high resolution image whenever there's space for it.
+Astro has a solution for this problem: It can generate variants of a source image in multiple resolutions, like this:
+```html
+<Image
+	widths={[360, 720, 1024, 1920]}
+	sizes="(max-width: 360px) 360px, (max-width: 720px) 720px, (max-width: 1024px) 1024px, (max-width: 1920px) 1920px"
+	src={image.data.src}
+	alt={image.data.title}
+/>
+```
+When running `npm run build`, 4 version of the source image are generated. All available sizes are declared in the `html`, so the browser can now choose which one is the best fit. I've decided not to include the original resolution at all but cap the resolution at a width of 1920px instead. On top of generating the variants, it also converts the image to `.webp` and optimizes it for the web.
+This image variant generation was one of the reasons why I didn't go for the SSR way, where this isn't directly possible. I could have offloaded this task to the Cloudflare Image Optimization API, but that one doesn't offer a free tier.
+Troughout testing I used images from [Unsplash](https://unsplash.com) which are also committed into the repository to show a working demo.
+## Asset Storage (Git LFS)
+To keep things simple, I wanted everything to be handled by git, including the actual images. I had heard of git Large File Storage (LFS) in the past, but never actually used it. LFS is an extension to git that seperates specific files from the rest, storing them on a special server as blobs. The idea is that there's no point in git looking into the actual file content and track changes there, so it doesn't. Those files can only be created and deleted, any update is a full replacement.
+Those files need to be stored somewhere though, and Github has a rather [low limit](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-storage-and-bandwidth-usage) on storage usage: 1GB bandwidth & storage respectively. I used ~150MB of pictures for testing, but quickly reached my bandwidth limit when I first set up the deployment:
+<ResponsiveImage src={githubStoragelimit} alt="Screenshot of Github telling me I've used 1.17GB of 1GB of bandwidth for Git LFS" />
+For $5, I could buy an additional 50GB for both. Unfortunately, $0.1 per GB of bandwidth is very far outside my financial limitations. Luckily for me, Cloudflare has a newish product called [R2](https://www.cloudflare.com/developer-platform/r2/), which boasts "zero egress fees" and has a free tier with 10GB of storage, unlimited bandwidth and is S3 API compatible. Sounds good to me!
+With the unlimited bandwidth feature, I could even serve images for the final site directly from R2, but since I only really need the generated variants and those can also be hosted for free with Cloudflare Pages, there's no need for the added complexity.
+There's a great repository [git-lfs-s3-proxy](https://github.com/milkey-mouse/git-lfs-s3-proxy) that tells you everything you need in order to use Git LFS with a Cloudflare R2 bucket. I followed their instructions and set up [my own proxy](https://github.com/NewYearNewPhil/git-lfs-s3-proxy) - which is hosted in the same way the final page will also be deployed (for free, using Cloudflare Pages).
+The credentials committed to the repository in the `.lfsconfig` are read only, so everyone can pull the objects but only those with knowledge of the write secret can write. With this set up, I uploaded all images to R2 and made sure things worked as expected.
+## Deployment
+Sticking with the Cloudflare theme, deployment is done using Cloudflare Pages. To set it up, you simply select the Github repository from within Cloudflare, enter the build command and press go. Cloudflare will run the build command, upload the artifact somewhere and give you a URL ending with `.pages.dev` where you can access them with a web browser.
+The Github integration adds deployment details to the repository when a deployment happens.
+<ResponsiveImage src={cfPagesGithub} alt="Screenshot of Github with a notification from Cloudflare Pages saying the deployment was successful and the URL of the deployed site" />
+It does all this for free, the limits are 100k total requests per day (shouldn't be an issue for a little while) and a 25MB max file size limit - no limit on total storage size. Here's the `.pages.dev` URL for the demo application: [astro-photo-site.pages.dev](https://astro-photo-site.pages.dev)
+I also enabled a Beta feature called "Build Cache" in Cloudflare, which drastically speeds up the builds because the image variants that already exists are reused, so only newly added images have to be processed:
+```bash
+# first build
+[build] 27 page(s) built in 12.49s
+# second build
+[build] 27 page(s) built in 3.80s
+```
+In general I'm pleasantly surprised by the ease of integration. The build process instantly worked, I didn't even experience any issues with pulling the file using Git LFS.
+Last but not least, I connected a domain I already have on Cloudflare to this page ([astro-photo-site.nynp.dev](https://astro-photo-site.nynp.dev)) and set up a [Rewrite Transform Rule](https://developers.cloudflare.com/rules/transform/url-rewrite/) so `/` would be an alias for `/1/`. Done!
+## Github Codespace
+My friend is not a software engineer, so I wanted to avoid him having to set up Node, VS Code etc. just to add new images. To make things simple, I set up a Github Codespace for the repository, which gives you a VS Code instance in the browser, connected to a machine (or docker container or something) hosted by Github which can be used for 120 hours per month without any subscription. This feature simply worked - turned it on, does exactly what I need (including a live preview while editing content or code), all without costing anything.
+
+## Using This
+This project was made for fun and learning new things. If you want to use the accompanying Github repository as a starting point for your own photo site, feel free to fork it and get going! You'll need to configure a different Git LFS server (or fall back to the Github one), apart from that everything should work out of the box, ready to be adapted for your needs.
+
+No promises on upstream stability though - I might make changes to this with no warning.
