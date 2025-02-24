@@ -4,8 +4,9 @@ import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
 import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSlug from 'rehype-slug';
-import rehypeAutolinkHeadings from 'rehype-autolink-headings'
-import mdx from "@astrojs/mdx";
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+
+import mdx from '@astrojs/mdx';
 
 // https://astro.build/config
 export default defineConfig({
@@ -30,7 +31,7 @@ export default defineConfig({
         {
           behavior: 'append',
         }],
-    ]
+    ],
   },
   vite: {
     define: {
